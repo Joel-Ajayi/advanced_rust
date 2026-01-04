@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+use std::ops::Deref;
+use std::mem::drop;
 
 // 1. Box Smart Pointer
 #[derive(Debug)]
@@ -9,7 +12,7 @@ enum List {
 
 
 use List::{Cons, Nil};
-fn main() {
+fn main_box() {
     let list = Cons(1, Rc::new(Cons(2, Rc::new(Cons(3, Rc::new(Nil))))));
     println!("Lets test smart pointers Box: {list:?}");
 
@@ -22,8 +25,6 @@ fn main() {
 
 
 // 2. Deref Trait
-use std::ops::Deref;
-use std::mem::drop;
 /* Deref coercion converts a reference to a type that implements the Deref trait into a reference to another type. 
     For example, deref coercion can convert &String to &str \
         because String implements the Deref trait such that it returns &str. 
@@ -66,4 +67,48 @@ fn main_deref() {
 
     let m = CustomBox::new(String::from("Rust"));
     hello(&m);
+}
+
+
+// Reference Cycle
+#[derive(Debug)]
+enum List2 {
+    Cons(i32, RefCell<Rc<List2>>),
+    Nil,
+}
+
+impl List2 {
+    fn tail(&self) -> Option<&RefCell<Rc<List2>>> {
+        match self {
+        List2::Cons(_, item) => Some(item),
+            List2::Nil => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Node {
+    value: i32,
+    parent: RefCell<Weak<Node>>,
+    children: RefCell<Vec<Rc<Node>>>,
+}
+
+fn main() {
+    let leaf = Rc::new(Node {
+        value: 3,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+
+    println!("leaf parent = {:?}", leaf.parent.borrow().upgrade());
+
+    let branch = Rc::new(Node {
+        value: 5,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![Rc::clone(&leaf)]),
+    });
+
+    *leaf.parent.borrow_mut() = Rc::downgrade(&branch);
+
+    println!("leaf parent = {:?}", leaf.parent.borrow().upgrade());
 }
